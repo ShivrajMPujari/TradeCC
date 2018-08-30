@@ -7,8 +7,6 @@ import (
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
-var Logger = shim.NewLogger("tradefinancecc")
-
 func checkInit(t *testing.T, stub *shim.MockStub, args [][]byte) {
 	res := stub.MockInit("1", args)
 	if res.Status != shim.OK {
@@ -16,7 +14,7 @@ func checkInit(t *testing.T, stub *shim.MockStub, args [][]byte) {
 		t.FailNow()
 	}
 	fmt.Println("success init")
-	Logger.Info("success init")
+
 }
 
 func checkInvoke(t *testing.T, stub *shim.MockStub, args [][]byte) {
