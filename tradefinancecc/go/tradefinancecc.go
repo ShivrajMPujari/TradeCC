@@ -20,7 +20,7 @@ type Account struct {
 //Contract structure
 type Contract struct {
 	ContractID         string `json:"contractId"`
-	ContentDescription string `json:"contentDescription"`
+	ContentDescription string `json:"contractDescription"`
 	Value              int    `json:"value"`
 	ImporterID         string `json:"importerId"`
 	ExporterID         string `json:"exporterId"`
