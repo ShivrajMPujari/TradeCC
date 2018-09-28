@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	peer "github.com/hyperledger/fabric/protos/peer"
+	shell "github.com/ipfs/go-ipfs-api"
 )
 
 //Account structure
@@ -35,17 +38,19 @@ type Contract struct {
 	ImporterCheck      bool   `json:"importerCheck"`
 	ImporterBankCheck  bool   `json:"importerBankCheck"`
 	Pointer            string `json:"pointer"`
+	BillOfLading       string `json:"billOfLading"`
+	LetterOfCredit     string `json:"letterOfCredit"`
 }
 
 // SimpleAsset implements a chaincode to manage an asset
 type SimpleAsset struct {
 }
 
-//Documents structure
-type Documents struct {
-	BillOfLading   string
-	LetterOfCredit string
-}
+// //Documents structure
+// type Documents struct {
+// 	BillOfLading   string
+// 	LetterOfCredit string
+// }
 
 //Logger creation ......
 var Logger = shim.NewLogger("tradefinancecc")
@@ -111,6 +116,10 @@ func (t *SimpleAsset) Invoke(stub shim.ChaincodeStubInterface) peer.Response {
 		return t.importerBankAssurity(stub, args)
 	} else if function == "insuranceAssurity" {
 		return t.insuranceAssurity(stub, args)
+	} else if function == "setFile" {
+		return t.setFile(stub, args)
+	} else if function == "getFile" {
+		return t.getFile(stub, args)
 	}
 
 	return shim.Error("Invalid invoke function must pass invoke/query as arguments ")
@@ -188,17 +197,18 @@ func (t *SimpleAsset) createAccount(stub shim.ChaincodeStubInterface, args []str
 	return shim.Success(nil)
 }
 
-func (t *SimpleAsset) createContract(stub shim.ChaincodeStubInterface, args []string) peer.Response {
+// func (t *SimpleAsset) setFile(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 
-	if len(args) != 8 {
-		shim.Error("input arguments are less")
-	}
+// }
+
+func (t *SimpleAsset) createContract(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 
 	contractValue, errContractValue := strconv.Atoi(args[2])
 	if errContractValue != nil {
 		return shim.Error("error while converting string to int ")
 	}
-	var contract = Contract{ContractID: args[0], ContentDescription: args[1], Value: contractValue, ExporterID: args[3], CustomID: args[4], InsuranceID: args[5], ImporterID: args[6], ImporterBankID: args[7], PortOfLoading: args[8], PortOfEntry: args[9], ImporterCheck: false, ExporterCheck: true, CustomCheck: false, ImporterBankCheck: false, InsuranceCheck: false, Pointer: args[4]}
+
+	var contract = Contract{ContractID: args[0], ContentDescription: args[1], Value: contractValue, ExporterID: args[3], CustomID: args[4], InsuranceID: args[5], ImporterID: args[6], ImporterBankID: args[7], PortOfLoading: args[8], PortOfEntry: args[9], ImporterCheck: false, ExporterCheck: true, CustomCheck: false, ImporterBankCheck: false, InsuranceCheck: false, Pointer: args[4], LetterOfCredit: args[10], BillOfLading: args[11]}
 	contractByte, errContractByte := json.Marshal(contract)
 	if errContractByte != nil {
 		return shim.Error("error while converting to json byte stream")
@@ -349,6 +359,39 @@ func (t *SimpleAsset) importerAssurity(stub shim.ChaincodeStubInterface, args []
 
 // }
 
+func (t *SimpleAsset) customAssurity1(stub shim.ChaincodeStubInterface, args []string) bool {
+
+	accountID := args[0]
+	contractID := args[1]
+
+	accountStruct, tempContractSruct, anyError := t.createStruct(stub, accountID, contractID)
+
+	if anyError != "" {
+		fmt.Println(anyError)
+		return false
+	}
+
+	if accountStruct.AccountNumber != tempContractSruct.CustomID {
+		fmt.Println("invalid custom account")
+		return false
+	}
+	if tempContractSruct.PortOfLoading != "denmark" || tempContractSruct.PortOfEntry != "berlin" {
+
+		fmt.Println("port of loading or port of entry doesn't matches")
+		return false
+	}
+
+	tempContractSruct.CustomCheck = true
+	tempContractSruct.Pointer = tempContractSruct.InsuranceID
+	_, anyError = t.putContractToLedger(stub, tempContractSruct)
+	if anyError != "" {
+		fmt.Println(anyError)
+		return false
+	}
+	return true
+
+}
+
 func (t *SimpleAsset) customAssurity(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 
 	accountID := args[0]
@@ -368,21 +411,21 @@ func (t *SimpleAsset) customAssurity(stub shim.ChaincodeStubInterface, args []st
 		return shim.Error("port of loading or port of entry doesn't matches")
 	}
 
-	importerID := tempContractSruct.ImporterID
-	importerByte, _ := stub.GetState(importerID)
-	if importerByte == nil {
-		return shim.Error("error while getting state of importer")
-	}
+	// importerID := tempContractSruct.ImporterID
+	// importerByte, _ := stub.GetState(importerID)
+	// if importerByte == nil {
+	// 	return shim.Error("error while getting state of importer")
+	// }
 
-	tempImporterSruct := Account{}
-	errImpAccountStruct := json.Unmarshal(importerByte, &tempImporterSruct)
-	if errImpAccountStruct != nil {
-		return shim.Error("error while converting to Struct Account importer")
-	}
+	// tempImporterSruct := Account{}
+	// errImpAccountStruct := json.Unmarshal(importerByte, &tempImporterSruct)
+	// if errImpAccountStruct != nil {
+	// 	return shim.Error("error while converting to Struct Account importer")
+	// }
 
-	if tempImporterSruct.Balance < tempContractSruct.Value+500 {
-		return shim.Error("insufficient balance in importers account  ")
-	}
+	// if tempImporterSruct.Balance < tempContractSruct.Value+500 {
+	// 	return shim.Error("insufficient balance in importers account  ")
+	// }
 
 	tempContractSruct.CustomCheck = true
 	tempContractSruct.Pointer = tempContractSruct.InsuranceID
@@ -408,11 +451,6 @@ func (t *SimpleAsset) importerBankAssurity(stub shim.ChaincodeStubInterface, arg
 	if tempContractSruct.ImporterBankID != accountStruct.AccountNumber {
 
 		return shim.Error("invalid importerBank Id ")
-	}
-
-	if tempContractSruct.PortOfLoading != "denmark" || tempContractSruct.PortOfEntry != "berlin" {
-
-		return shim.Error("port of loading or port of entry doesn't matches")
 	}
 
 	importerID := tempContractSruct.ImporterID
@@ -441,6 +479,56 @@ func (t *SimpleAsset) importerBankAssurity(stub shim.ChaincodeStubInterface, arg
 	return shim.Success(newContractByte)
 }
 
+// func (t *SimpleAsset) insuranceAssurity1(stub shim.ChaincodeStubInterface, args []string) bool {
+
+// 	accountID := args[0]
+// 	contractID := args[1]
+
+// 	accountStruct, tempContractSruct, anyError := t.createStruct(stub, accountID, contractID)
+
+// 	if anyError != "" {
+// 		return shim.Error(anyError)
+// 	}
+
+// 	if accountStruct.AccountNumber != tempContractSruct.InsuranceID {
+
+// 		return shim.Error("insurance account is not valid...")
+// 	}
+
+// 	if tempContractSruct.PortOfLoading != "denmark" || tempContractSruct.PortOfEntry != "berlin" {
+
+// 		return shim.Error("port of loading or port of entry doesn't matches")
+// 	}
+
+// 	importerID := tempContractSruct.ImporterID
+// 	importerByte, _ := stub.GetState(importerID)
+// 	if importerByte == nil {
+// 		return shim.Error("error while getting state of importer")
+// 	}
+
+// 	if tempContractSruct.BillOfLading == nil || tempContractSruct.BillOfLading == "" {
+
+// 	}
+
+// 	tempImporterSruct := Account{}
+// 	errImpAccountStruct := json.Unmarshal(importerByte, &tempImporterSruct)
+// 	if errImpAccountStruct != nil {
+// 		return shim.Error("error while converting to Struct Account importer")
+// 	}
+
+// 	if tempImporterSruct.Balance < tempContractSruct.Value+500 {
+// 		return shim.Error("insufficient balance in importers account  ")
+// 	}
+
+// 	tempContractSruct.InsuranceCheck = true
+// 	tempContractSruct.Pointer = tempContractSruct.ImporterID
+// 	newContractByte, anyError := t.putContractToLedger(stub, tempContractSruct)
+// 	if anyError != "" {
+// 		return shim.Error(anyError)
+// 	}
+// 	return shim.Success(newContractByte)
+// }
+
 func (t *SimpleAsset) insuranceAssurity(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 
 	accountID := args[0]
@@ -457,26 +545,26 @@ func (t *SimpleAsset) insuranceAssurity(stub shim.ChaincodeStubInterface, args [
 		return shim.Error("insurance account is not valid...")
 	}
 
-	if tempContractSruct.PortOfLoading != "denmark" || tempContractSruct.PortOfEntry != "berlin" {
+	if tempContractSruct.BillOfLading == "" || tempContractSruct.LetterOfCredit == "" {
 
-		return shim.Error("port of loading or port of entry doesn't matches")
+		return shim.Error("Insufficient Documents present")
 	}
 
-	importerID := tempContractSruct.ImporterID
-	importerByte, _ := stub.GetState(importerID)
-	if importerByte == nil {
-		return shim.Error("error while getting state of importer")
-	}
+	// importerID := tempContractSruct.ImporterID
+	// importerByte, _ := stub.GetState(importerID)
+	// if importerByte == nil {
+	// 	return shim.Error("error while getting state of importer")
+	// }
 
-	tempImporterSruct := Account{}
-	errImpAccountStruct := json.Unmarshal(importerByte, &tempImporterSruct)
-	if errImpAccountStruct != nil {
-		return shim.Error("error while converting to Struct Account importer")
-	}
+	// tempImporterSruct := Account{}
+	// errImpAccountStruct := json.Unmarshal(importerByte, &tempImporterSruct)
+	// if errImpAccountStruct != nil {
+	// 	return shim.Error("error while converting to Struct Account importer")
+	// }
 
-	if tempImporterSruct.Balance < tempContractSruct.Value+500 {
-		return shim.Error("insufficient balance in importers account  ")
-	}
+	// if tempImporterSruct.Balance < tempContractSruct.Value+500 {
+	// 	return shim.Error("insufficient balance in importers account  ")
+	// }
 
 	tempContractSruct.InsuranceCheck = true
 	tempContractSruct.Pointer = tempContractSruct.ImporterID
@@ -610,6 +698,46 @@ func (t *SimpleAsset) getStructs(stub shim.ChaincodeStubInterface, id string) (A
 	}
 	recordError = ""
 	return accountStruct, recordError
+}
+
+func (t *SimpleAsset) setFile(stub shim.ChaincodeStubInterface, args []string) peer.Response {
+
+	fileKey := args[0]
+	fileValue := args[1]
+
+	var r io.Reader
+	r = strings.NewReader(fileValue)
+	sh := shell.NewShell("localhost:5001")
+	link, _ := sh.Add(r)
+	fmt.Println(link)
+	// fileByte, fileErr := json.Marshal(fileValue)
+	fileByte := []byte(fileValue)
+
+	// if fileErr != nil {
+	// 	return shim.Error("error while marshaling ")
+	// }
+
+	err2 := stub.PutState(fileKey, fileByte)
+
+	if err2 != nil {
+		return shim.Error("error while putting data ")
+	}
+
+	return shim.Success(nil)
+}
+
+func (t *SimpleAsset) getFile(stub shim.ChaincodeStubInterface, args []string) peer.Response {
+
+	fileKey := args[0]
+	fileByte, errInFileByte := stub.GetState(fileKey)
+
+	if errInFileByte != nil {
+
+		shim.Error("error while getting file byte from ledger")
+
+	}
+
+	return shim.Success(fileByte)
 }
 
 func (t *SimpleAsset) putContractToLedger(stub shim.ChaincodeStubInterface, contractStruct Contract) ([]byte, string) {

@@ -142,6 +142,7 @@ func (t *SimpleChaincode) invoke(stub shim.ChaincodeStubInterface, args []string
 	if err != nil {
 		return shim.Error(err.Error())
 	}
+	stub.SetEvent("event1", []byte("fd"))
 
 	return shim.Success(nil)
 }
